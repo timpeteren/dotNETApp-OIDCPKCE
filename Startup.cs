@@ -36,7 +36,7 @@ namespace WebApp_OpenIDConnect_DotNet
 
             // Configuration to sign-in users with Azure AD B2C
             services.AddMicrosoftIdentityWebAppAuthentication(Configuration, Constants.AzureAdB2C);
-            
+
             services.AddControllersWithViews()
                 .AddMicrosoftIdentityUI();
 
@@ -60,6 +60,9 @@ namespace WebApp_OpenIDConnect_DotNet
                 // The default HSTS value is 30 days. You may want to change this for production scenarios, see https://aka.ms/aspnetcore-hsts.
                 app.UseHsts();
             }
+
+            // Default value false (https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet/wiki/PII)
+            // Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII = true;
 
             app.UseHttpsRedirection();
             app.UseStaticFiles();
