@@ -39,7 +39,7 @@ namespace WebApp_OpenIDConnect_DotNet
             services.AddDistributedMemoryCache(); // Enables session caching
             services.AddSession(); // Enables session storage
 
-            // Configure Azure AD B2C authentication
+            // Configure Microsoft B2C authentication
             services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
                 .AddMicrosoftIdentityWebApp(Configuration.GetSection(Constants.AzureAdB2C))
                 // Required for an access_token to be issued
@@ -47,11 +47,17 @@ namespace WebApp_OpenIDConnect_DotNet
                 .EnableTokenAcquisitionToCallDownstreamApi(new string[] {})
                 .AddDistributedTokenCaches();
 
-            // Explicitly configure OpenIdConnectOptions to add the query parameter
+            // Use OnRedirectToIdentityProvider to allow for runtime logic
             services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
             {
+                // Add authorization parameter declaratively
+                options.AdditionalAuthorizationParameters.Add("appUrl", "https://jwt.ms");
+
                 // Required for an access_token to be issued
-                options.Events.OnAuthorizationCodeReceived = async context => {};
+                options.Events.OnAuthorizationCodeReceived = context => 
+                {
+                    return Task.CompletedTask;
+                };
 
                 options.Events.OnTokenResponseReceived = context =>
                 {
@@ -60,12 +66,14 @@ namespace WebApp_OpenIDConnect_DotNet
                     return Task.CompletedTask;
                 };
 
-                options.Events.OnRedirectToIdentityProvider = context =>
-                {
-                    // Add a custom query parameter
-                    context.ProtocolMessage.SetParameter("appUrl", "https://jwt.ms");
-                    return Task.CompletedTask;
-                };
+            //     // To dynamically modify parameters (e.g., based on user input or request state).
+            //     // OnRedirectToIdentityProvider allows for runtime logic.
+            //     options.Events.OnRedirectToIdentityProvider = context =>
+            //     {
+            //         // Add a custom query parameter
+            //         context.ProtocolMessage.SetParameter("appUrl", "https://jwt.ms");
+            //         return Task.CompletedTask;
+            //     };
             });
 
             services.AddControllersWithViews()
