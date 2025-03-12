@@ -10,6 +10,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Identity.Web;
 using Microsoft.Identity.Web.UI;
+using System;
+using System.Threading.Tasks;
 
 namespace WebApp_OpenIDConnect_DotNet
 {
@@ -34,17 +36,53 @@ namespace WebApp_OpenIDConnect_DotNet
                 options.HandleSameSiteCookieCompatibility();
             });
 
-            // Configuration to sign-in users with Azure AD B2C
-            services.AddMicrosoftIdentityWebAppAuthentication(Configuration, Constants.AzureAdB2C);
-            
+            services.AddDistributedMemoryCache(); // Enables session caching
+            services.AddSession(); // Enables session storage
+
+            // Configure Microsoft B2C authentication
+            services.AddAuthentication(OpenIdConnectDefaults.AuthenticationScheme)
+                .AddMicrosoftIdentityWebApp(Configuration.GetSection(Constants.AzureAdB2C))
+                // Required for an access_token to be issued
+                // Scopes (list of strings) can be defined here, or in "Scope", in appsettings
+                .EnableTokenAcquisitionToCallDownstreamApi(new string[] {})
+                .AddDistributedTokenCaches();
+
+            // Use OnRedirectToIdentityProvider to allow for runtime logic
+            services.Configure<OpenIdConnectOptions>(OpenIdConnectDefaults.AuthenticationScheme, options =>
+            {
+                // Add authorization parameter declaratively
+                options.AdditionalAuthorizationParameters.Add("appUrl", "https://jwt.ms");
+
+                // Required for an access_token to be issued
+                options.Events.OnAuthorizationCodeReceived = context => 
+                {
+                    return Task.CompletedTask;
+                };
+
+                options.Events.OnTokenResponseReceived = context =>
+                {
+                    Console.WriteLine($"Access token: {context.TokenEndpointResponse?.AccessToken}");
+                    Console.WriteLine($"ID token: {context.TokenEndpointResponse?.IdToken}");
+                    return Task.CompletedTask;
+                };
+
+            //     // To dynamically modify parameters (e.g., based on user input or request state).
+            //     // OnRedirectToIdentityProvider allows for runtime logic.
+            //     options.Events.OnRedirectToIdentityProvider = context =>
+            //     {
+            //         // Add a custom query parameter
+            //         context.ProtocolMessage.SetParameter("appUrl", "https://jwt.ms");
+            //         return Task.CompletedTask;
+            //     };
+            });
+
             services.AddControllersWithViews()
                 .AddMicrosoftIdentityUI();
 
             services.AddRazorPages();
 
-            //Configuring appsettings section AzureAdB2C, into IOptions
+            // Adding appsettings section into IOptions
             services.AddOptions();
-            services.Configure<OpenIdConnectOptions>(Configuration.GetSection("AzureAdB2C"));
         }
 
         // This method gets called by the runtime. Use this method to configure the HTTP request pipeline.
@@ -61,12 +99,19 @@ namespace WebApp_OpenIDConnect_DotNet
                 app.UseHsts();
             }
 
+            // Default value false (https://github.com/AzureAD/azure-activedirectory-identitymodel-extensions-for-dotnet/wiki/PII)
+            if (Configuration.GetSection(Constants.AzureAdB2C).GetValue<bool>("EnablePiiLogging") == true) {
+                Microsoft.IdentityModel.Logging.IdentityModelEventSource.ShowPII = true;
+            }
+
             app.UseHttpsRedirection();
             app.UseStaticFiles();
 
             app.UseRouting();
             app.UseAuthentication();
             app.UseAuthorization();
+            // Enable session storage for distributed memory cache
+            app.UseSession();
 
             app.UseEndpoints(endpoints =>
             {
